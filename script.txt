@@ -1,0 +1,97 @@
+library(tm)
+library(SnowballC)
+library(wordcloud)
+setwd("C:/Users/vibho/OneDrive/Documents/Machine Learning")
+file_path_trainspam <- file.path(".","train","spam")
+train_spam_corpus <- VCorpus(DirSource(file_path_trainspam), readerControl = list(reader = readPlain))
+file_path_trainham <- file.path(".","train","ham")
+train_ham_corpus <- VCorpus(DirSource(file_path_trainham), readerControl = list(reader = readPlain))
+file_path_testspam <- file.path(".","test","spam")
+test_spam_corpus <- VCorpus(DirSource(file_path_testspam), readerControl = list(reader = readPlain))
+file_path_testham <- file.path(".","test","ham")
+test_ham_corpus <- VCorpus(DirSource(file_path_testham),readerControl = list(reader = readPlain))
+train_data <- c(train_spam_corpus,train_ham_corpus)
+test_data <- c(test_spam_corpus,test_ham_corpus)
+
+#converting to lower
+corpus_train_clean <- tm_map(train_data,content_transformer(tolower))
+corpus_test_clean <- tm_map(test_data,content_transformer(tolower))
+corpus_train_spam_clean <- tm_map(train_spam_corpus,content_transformer(tolower))
+corpus_train_ham_clean <- tm_map(train_ham_corpus,content_transformer(tolower))
+
+#removing numbers
+corpus_train_clean <- tm_map(corpus_train_clean,removeNumbers)
+corpus_test_clean <- tm_map(corpus_test_clean,removeNumbers)
+corpus_train_spam_clean <- tm_map(corpus_train_spam_clean,removeNumbers)
+corpus_train_ham_clean <- tm_map(corpus_train_ham_clean, removeNumbers)
+
+#removing the words
+corpus_train_clean <- tm_map(corpus_train_clean, removeWords, stopwords())
+corpus_test_clean <- tm_map(corpus_test_clean, removeWords, stopwords())
+corpus_train_spam_clean <- tm_map(corpus_train_spam_clean, removeWords, stopwords())
+corpus_train_ham_clean <- tm_map(corpus_train_ham_clean, removeWords, stopwords())
+
+#replacing punctuation
+replacePunctuation <- function(x){
+  gsub("[[:punct:]]+", " ", x)
+}
+corpus_train_clean <- tm_map(corpus_train_clean, replacePunctuation)
+corpus_test_clean <- tm_map(corpus_test_clean, replacePunctuation)
+corpus_train_spam_clean <- tm_map(corpus_train_spam_clean, replacePunctuation)
+corpus_train_ham_clean <- tm_map(corpus_train_ham_clean, replacePunctuation)
+
+#using stem function
+corpus_train_clean <- tm_map(corpus_train_clean, stemDocument)
+corpus_test_clean <- tm_map(corpus_test_clean, stemDocument)
+corpus_train_spam_clean <- tm_map(corpus_train_spam_clean, stemDocument)
+corpus_train_ham_clean <- tm_map(corpus_train_ham_clean, stemDocument)
+
+#removing the white spaces
+corpus_train_clean <- tm_map(corpus_train_clean, stripWhitespace)
+corpus_test_clean <- tm_map(corpus_test_clean, stripWhitespace)
+corpus_train_spam_clean <- tm_map(corpus_train_spam_clean, stripWhitespace)
+corpus_train_ham_clean <- tm_map(corpus_train_ham_clean, stripWhitespace)
+
+#converting to plain document
+corpus_train_clean <- tm_map(corpus_train_clean, PlainTextDocument)
+corpus_test_clean <- tm_map(corpus_test_clean, PlainTextDocument)
+corpus_train_spam_clean <- tm_map(corpus_train_spam_clean, PlainTextDocument)
+corpus_train_ham_clean <- tm_map(corpus_train_ham_clean, PlainTextDocument)
+
+#creating wordcloud
+wordcloud(corpus_train_spam_clean, min.freq = 50)
+wordcloud(corpus_train_ham_clean, min.freq = 50)
+
+#creating documenttermmatrix
+corpus_train_dtm <- DocumentTermMatrix(corpus_train_clean)
+corpus_test_dtm <- DocumentTermMatrix(corpus_test_clean)
+
+#converting numerical to categorical
+convert_counts <- function(x) {
+  x <- ifelse(x > 0, "Yes", "No")
+}
+
+train_final <- apply(corpus_train_dtm, MARGIN = 2, convert_counts)
+test_final <- apply(corpus_test_dtm, MARGIN = 2, convert_counts)
+
+#preparing the train values
+train_spam_value<- rep("SPAM",length(1:123))
+train_ham_value<- rep("HAM",length(1:340))
+train_labels <-as.factor(c(train_spam_value,train_ham_value))
+
+#preparing test value
+test_spam_value<- rep("SPAM",length(1:130))
+test_ham_value<- rep("HAM",length(1:348))
+test_labels <-as.factor(c(test_spam_value,test_ham_value))
+
+#installing naivebayes package
+install.packages("e1071")
+library(e1071)
+
+#implementing the model
+subject_classifier <- naiveBayes(train_final, train_labels, laplace = 1)
+test_pred <- predict(subject_classifier, test_final)
+
+#crosstable
+library(gmodels)
+CrossTable(test_pred, test_labels, prop.chisq = FALSE, prop.t = FALSE, dnn = c('predicted', 'actual'))
